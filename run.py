@@ -51,6 +51,8 @@ def main() -> None:
     ap.add_argument("--max-bet", type=float, default=50.0)
     ap.add_argument("--live", action="store_true", help="LIVE trading (default: DRY)")
     ap.add_argument("--no-kronos", action="store_true", help="Disable Kronos filter")
+    ap.add_argument("--kronos-driven", action="store_true",
+                    help="Kronos-driven mode: bot trades direction from Kronos, no other filters")
     ap.add_argument("--device", default="mps", choices=["mps", "cpu", "cuda"])
     ap.add_argument("--paths", type=int, default=20, help="Forecast paths in fan")
     args = ap.parse_args()
@@ -71,11 +73,15 @@ def main() -> None:
         bot_cmd.append("--live")
     if args.no_kronos:
         bot_cmd.append("--no-kronos")
+    if args.kronos_driven:
+        bot_cmd.append("--kronos-driven")
 
     print(f"{INFO_COLOR}{'=' * 64}{RESET}")
     print(f"{INFO_COLOR}  Bot_kronos launcher{RESET}")
+    kronos_mode = ("KRONOS-DRIVEN" if args.kronos_driven else
+                   "OFF" if args.no_kronos else "ON (filter)")
     print(f"{INFO_COLOR}  Mode: {'LIVE' if args.live else 'DRY'} | "
-          f"Kronos: {'OFF' if args.no_kronos else 'ON'} | "
+          f"Kronos: {kronos_mode} | "
           f"Asset: {args.asset} | Device: {args.device}{RESET}")
     print(f"{INFO_COLOR}{'=' * 64}{RESET}\n")
 

@@ -81,6 +81,7 @@ class Sniper:
         mode: str = "safe",
         max_bet: float = 50.0,
         use_kronos: bool = True,
+        kronos_driven: bool = False,
     ) -> None:
         self.asset = asset
         self.client = client
@@ -89,7 +90,9 @@ class Sniper:
         self.mode_name = mode
         self.mode_cfg = MODES[mode]
         self.max_bet = max_bet
-        self.use_kronos = use_kronos and KRONOS_AVAILABLE
+        # kronos_driven forces use_kronos and replaces direction from Kronos
+        self.kronos_driven = kronos_driven and KRONOS_AVAILABLE
+        self.use_kronos = (use_kronos or self.kronos_driven) and KRONOS_AVAILABLE
         self.engine = SignalEngine()
         self.state = WindowState()
         self.stats = Stats()
@@ -183,6 +186,19 @@ class Sniper:
         if not sig.direction:
             self._last_reason = "no_direction"
             return False
+
+        # KRONOS-DRIVEN: simplified gate — no delta/conf/window/confirm filters
+        if self.kronos_driven:
+            elapsed = WINDOW_SECS - secs_left
+            if elapsed < 30:
+                self._last_reason = "kronos_drv:too_early"
+                return False
+            if secs_left < 60:
+                self._last_reason = "kronos_drv:too_late"
+                return False
+            self._last_reason = f"KRONOS_DRV|{sig.direction}@{sig.confidence:.2f}"
+            return True
+
         if abs(sig.delta_pct) < self.asset.min_delta_pct:
             self._last_reason = f"delta<{self.asset.min_delta_pct}"
             return False
@@ -235,8 +251,13 @@ class Sniper:
             return False
 
         buy_price = round(book.best_ask, 2)
-        if buy_price > a.max_token_price or buy_price < a.min_token_price:
-            print(f"[{a.name}] skip: price={buy_price:.2f} outside [{a.min_token_price}, {a.max_token_price}]")
+        # In kronos-driven mode use a wider price range (early-window buys are cheap)
+        if self.kronos_driven:
+            min_p, max_p = 0.05, 0.90
+        else:
+            min_p, max_p = a.min_token_price, a.max_token_price
+        if buy_price > max_p or buy_price < min_p:
+            print(f"[{a.name}] skip: price={buy_price:.2f} outside [{min_p}, {max_p}]")
             return False
 
         # V1: Kelly bet sizing
@@ -567,6 +588,27 @@ class Sniper:
 
         self.engine.add_tick(price, now_ts)
         sig = self.engine.analyze(self.state.open_price, price)
+
+        # KRONOS-DRIVEN: replace sig.direction with Kronos prediction
+        if self.kronos_driven:
+            pred = kronos_filter.load_signal()
+            if (pred
+                and pred.get("window_ts") == self.state.window_ts
+                and pred.get("consensus", 0.0) >= 0.70
+                and pred.get("direction") in ("UP", "DOWN")):
+                # Override the engine signal with Kronos signal
+                sig = Signal(
+                    direction=pred["direction"],
+                    score=pred["consensus"] * 100.0,
+                    confidence=pred["consensus"],
+                    delta_pct=pred.get("mean_pred_pct", 0.0),
+                    delta_usd=0.0,
+                    agreement=pred["consensus"],
+                )
+            else:
+                # No valid Kronos signal — clear direction so bot won't fire
+                sig = Signal()
+
         if abs(sig.score) > abs(self.state.best_signal.score):
             self.state.best_signal = sig
         secs_left = self._secs_left(now_ts)
