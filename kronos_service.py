@@ -108,7 +108,7 @@ def main() -> None:
     ap.add_argument("--device", default="mps", choices=["mps", "cpu", "cuda"])
     ap.add_argument("--paths", type=int, default=20)
     ap.add_argument("--tokenizer", default="NeoQuasar/Kronos-Tokenizer-base")
-    ap.add_argument("--model", default="NeoQuasar/Kronos-small")
+    ap.add_argument("--model", default="NeoQuasar/Kronos-base")
     args = ap.parse_args()
 
     print(f"[Kronos] Loading {args.model} on {args.device}...")
