@@ -635,8 +635,10 @@ class Sniper:
 
         self.state.prev_score = sig.score
 
-        # Check early exit opportunity
-        if self.state.fired and secs_left > max(self.asset.eval_end_secs - 2, 2):
+        # Check early exit opportunity (disabled in kronos-driven mode)
+        if (self.state.fired
+                and not self.kronos_driven
+                and secs_left > max(self.asset.eval_end_secs - 2, 2)):
             self._maybe_early_exit()
 
     def run(self) -> None:
