@@ -17,6 +17,12 @@ from notifier import send_telegram
 from price_feed import BinanceWsPriceFeed
 from signal_engine import Signal, SignalEngine
 
+try:
+    import kronos_filter
+    KRONOS_AVAILABLE = True
+except ImportError:
+    KRONOS_AVAILABLE = False
+
 WINDOW_SECS = 300
 DRY_RUN_BALANCE = 20.0
 MIN_BET_USD = 1.0
@@ -74,6 +80,7 @@ class Sniper:
         dry_run: bool = True,
         mode: str = "safe",
         max_bet: float = 50.0,
+        use_kronos: bool = True,
     ) -> None:
         self.asset = asset
         self.client = client
@@ -82,6 +89,7 @@ class Sniper:
         self.mode_name = mode
         self.mode_cfg = MODES[mode]
         self.max_bet = max_bet
+        self.use_kronos = use_kronos and KRONOS_AVAILABLE
         self.engine = SignalEngine()
         self.state = WindowState()
         self.stats = Stats()
@@ -192,6 +200,14 @@ class Sniper:
         if not self._confirm_direction(sig.direction):
             self._last_reason = f"confirm<{self.asset.confirm_ticks}"
             return False
+        # Kronos filter — last gate before fire
+        if self.use_kronos:
+            block, k_reason, k_sig = kronos_filter.evaluate(sig.direction, self.state.window_ts)
+            if block:
+                self._last_reason = k_reason
+                return False
+            self._last_reason = f"READY|{k_reason}"
+            return True
         self._last_reason = "READY"
         return True
 

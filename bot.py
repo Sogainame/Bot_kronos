@@ -13,7 +13,7 @@ from price_feed import BinanceWsPriceFeed
 from sniper import Sniper
 
 
-def run_single(asset: AssetConfig, dry_run: bool, mode: str, max_bet: float) -> Sniper:
+def run_single(asset: AssetConfig, dry_run: bool, mode: str, max_bet: float, use_kronos: bool = True) -> Sniper:
     feed = BinanceWsPriceFeed(asset.binance_symbol.lower())
     feed.start()
     print("[WS] Waiting for first price tick...")
@@ -24,7 +24,7 @@ def run_single(asset: AssetConfig, dry_run: bool, mode: str, max_bet: float) -> 
     snap = feed.latest()
     print(f"[WS] First price: {snap.price:.2f}")
 
-    sniper = Sniper(asset, PolymarketClient(), feed, dry_run=dry_run, mode=mode, max_bet=max_bet)
+    sniper = Sniper(asset, PolymarketClient(), feed, dry_run=dry_run, mode=mode, max_bet=max_bet, use_kronos=use_kronos)
     try:
         sniper.run()
     except KeyboardInterrupt:
@@ -34,7 +34,7 @@ def run_single(asset: AssetConfig, dry_run: bool, mode: str, max_bet: float) -> 
     return sniper
 
 
-def run_multi(assets: list[AssetConfig], dry_run: bool, mode: str, max_bet: float) -> None:
+def run_multi(assets: list[AssetConfig], dry_run: bool, mode: str, max_bet: float, use_kronos: bool = True) -> None:
     feeds: dict[str, BinanceWsPriceFeed] = {}
     for asset in assets:
         sym = asset.binance_symbol.lower()
@@ -53,7 +53,7 @@ def run_multi(assets: list[AssetConfig], dry_run: bool, mode: str, max_bet: floa
 
     def worker(asset: AssetConfig) -> None:
         feed = feeds[asset.binance_symbol.lower()]
-        sniper = Sniper(asset, PolymarketClient(), feed, dry_run=dry_run, mode=mode, max_bet=max_bet)
+        sniper = Sniper(asset, PolymarketClient(), feed, dry_run=dry_run, mode=mode, max_bet=max_bet, use_kronos=use_kronos)
         snipers.append(sniper)
         sniper.run()
 
@@ -87,6 +87,7 @@ def main() -> None:
     parser.add_argument("--live", action="store_true", help="Use live trading")
     parser.add_argument("--mode", choices=["safe", "aggressive", "degen"], default="safe")
     parser.add_argument("--max-bet", type=float, default=50.0)
+    parser.add_argument("--no-kronos", action="store_true", help="Disable Kronos filter")
     args = parser.parse_args()
 
     asset_arg = args.asset.lower().strip()
@@ -99,15 +100,16 @@ def main() -> None:
         sys.exit(1)
 
     dry_run = not args.live
+    use_kronos = not args.no_kronos
     print("=" * 64)
     print(f"Sniper Poly Bot | mode={'LIVE' if args.live else 'DRY'} | assets={', '.join(a.name for a in assets)}")
-    print(f"strategy={args.mode} | max_bet=${args.max_bet:.2f} | price=WebSocket")
+    print(f"strategy={args.mode} | max_bet=${args.max_bet:.2f} | price=WebSocket | Kronos={'ON' if use_kronos else 'OFF'}")
     print("=" * 64)
 
     if len(assets) == 1:
-        run_single(assets[0], dry_run=dry_run, mode=args.mode, max_bet=args.max_bet)
+        run_single(assets[0], dry_run=dry_run, mode=args.mode, max_bet=args.max_bet, use_kronos=use_kronos)
     else:
-        run_multi(assets, dry_run=dry_run, mode=args.mode, max_bet=args.max_bet)
+        run_multi(assets, dry_run=dry_run, mode=args.mode, max_bet=args.max_bet, use_kronos=use_kronos)
 
 
 if __name__ == "__main__":
