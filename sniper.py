@@ -633,8 +633,9 @@ class Sniper:
             self.state.best_signal = sig
         secs_left = self._secs_left(now_ts)
 
-        # Heartbeat log (every 10s)
-        if now_ts - self._last_heartbeat_ts >= 10:
+        # Heartbeat log (every 10s, but skip noisy "nothing happening" states)
+        SILENT_REASONS = {"no_direction", "already_fired"}
+        if now_ts - self._last_heartbeat_ts >= 10 and self._last_reason not in SILENT_REASONS:
             self._last_heartbeat_ts = now_ts
             t_start = datetime.fromtimestamp(self.state.window_ts, timezone.utc).strftime("%H:%M")
             t_end = datetime.fromtimestamp(self.state.window_ts + self.window_secs, timezone.utc).strftime("%H:%M")
