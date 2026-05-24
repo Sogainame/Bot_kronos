@@ -260,11 +260,15 @@ class Sniper:
             print(f"[{a.name}] skip: price={buy_price:.2f} outside [{min_p}, {max_p}]")
             return False
 
-        # V1: Kelly bet sizing
-        bet = self._kelly_bet(sig.confidence, buy_price)
-        if bet < MIN_BET_USD:
-            print(f"[{a.name}] skip: Kelly no edge (conf={sig.confidence:.0%} price={buy_price:.2f})")
-            return False
+        # In kronos-driven mode: fixed bet size, no Kelly filtering
+        if self.kronos_driven:
+            bet = 5.0  # fixed $5 per trade
+        else:
+            # V1: Kelly bet sizing
+            bet = self._kelly_bet(sig.confidence, buy_price)
+            if bet < MIN_BET_USD:
+                print(f"[{a.name}] skip: Kelly no edge (conf={sig.confidence:.0%} price={buy_price:.2f})")
+                return False
 
         shares = max(bet / buy_price, 6)  # min 6: fee eats ~0.01 → 4.99 < min sell 5
         cost = shares * buy_price
