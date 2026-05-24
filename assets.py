@@ -25,6 +25,7 @@ class AssetConfig:
     early_exit_profit: float = 0.10  # from V1: gain threshold for early sell
     max_spread: float = 0.06        # from V2: skip if book spread wider
     min_score_gap: float = 0.40     # from V2: minimum score jump between ticks
+    timeframe_minutes: int = 5      # window length in minutes (5, 15, 60, etc.)
     enabled: bool = True
 
 
@@ -130,7 +131,29 @@ ALL_ASSETS: dict[str, AssetConfig] = {
     "eth": ETH,
     "xrp": XRP,
     "doge": DOGE,
+    "btc15m": None,  # populated below after BTC_15M is defined
 }
+
+# 15-minute BTC market (kronos-driven trading uses this)
+BTC_15M = AssetConfig(
+    name="BTC15M",
+    slug_prefix="btc",
+    binance_symbol="BTCUSDT",
+    chainlink_symbol="btc/usd",
+    min_delta_pct=0.05,
+    min_confidence=0.30,
+    max_token_price=0.95,
+    min_token_price=0.05,        # wider range for kronos-driven mode
+    eval_start_secs=15,
+    eval_end_secs=3,
+    priority=1,
+    confirm_ticks=2,
+    early_exit_profit=0.10,
+    max_spread=0.06,
+    min_score_gap=0.20,
+    timeframe_minutes=15,         # ← 15-minute windows
+)
+ALL_ASSETS["btc15m"] = BTC_15M
 
 
 def get_asset(name: str) -> AssetConfig:

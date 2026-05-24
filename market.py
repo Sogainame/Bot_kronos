@@ -248,8 +248,8 @@ class PolymarketClient:
         except Exception:
             return None
 
-    def find_market(self, slug_prefix: str, window_ts: int) -> dict[str, Any] | None:
-        slug = f"{slug_prefix}-updown-5m-{window_ts}"
+    def find_market(self, slug_prefix: str, window_ts: int, timeframe_minutes: int = 5) -> dict[str, Any] | None:
+        slug = f"{slug_prefix}-updown-{timeframe_minutes}m-{window_ts}"
         market = self._load_market(slug)
         if not market:
             return None

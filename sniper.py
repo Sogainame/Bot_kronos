@@ -23,7 +23,7 @@ try:
 except ImportError:
     KRONOS_AVAILABLE = False
 
-WINDOW_SECS = 300
+WINDOW_SECS = 300  # legacy default, real value comes from asset.timeframe_minutes
 DRY_RUN_BALANCE = 20.0
 MIN_BET_USD = 1.0
 BALANCE_RESERVE = 0.50
@@ -105,13 +105,18 @@ class Sniper:
 
     # ── Timing ─────────────────────────────────────────────────────────────
 
+    @property
+    def window_secs(self) -> int:
+        """Window length in seconds, derived from asset.timeframe_minutes."""
+        return self.asset.timeframe_minutes * 60
+
     def _window_ts(self, now: float | None = None) -> int:
         now_ts = time.time() if now is None else now
-        return int(now_ts - (now_ts % WINDOW_SECS))
+        return int(now_ts - (now_ts % self.window_secs))
 
     def _secs_left(self, now: float | None = None) -> float:
         now_ts = time.time() if now is None else now
-        return self._window_ts(now_ts) + WINDOW_SECS - now_ts
+        return self._window_ts(now_ts) + self.window_secs - now_ts
 
     # ── V1 Kelly Criterion ─────────────────────────────────────────────────
 
@@ -154,7 +159,7 @@ class Sniper:
     def _ensure_market(self) -> bool:
         if self.state.slug:
             return True
-        market = self.client.find_market(self.asset.slug_prefix, self.state.window_ts)
+        market = self.client.find_market(self.asset.slug_prefix, self.state.window_ts, self.asset.timeframe_minutes)
         if not market:
             return False
         self.state.slug = market["slug"]
@@ -189,11 +194,13 @@ class Sniper:
 
         # KRONOS-DRIVEN: simplified gate — no delta/conf/window/confirm filters
         if self.kronos_driven:
-            elapsed = WINDOW_SECS - secs_left
+            elapsed = self.window_secs - secs_left
             if elapsed < 30:
                 self._last_reason = "kronos_drv:too_early"
                 return False
-            if secs_left < 60:
+            # Need at least 20% of window left to give the forecast time to play out
+            min_left = max(60, int(self.window_secs * 0.20))
+            if secs_left < min_left:
                 self._last_reason = "kronos_drv:too_late"
                 return False
             self._last_reason = f"KRONOS_DRV|{sig.direction}@{sig.confidence:.2f}"
@@ -630,7 +637,7 @@ class Sniper:
         if now_ts - self._last_heartbeat_ts >= 10:
             self._last_heartbeat_ts = now_ts
             t_start = datetime.fromtimestamp(self.state.window_ts, timezone.utc).strftime("%H:%M")
-            t_end = datetime.fromtimestamp(self.state.window_ts + WINDOW_SECS, timezone.utc).strftime("%H:%M")
+            t_end = datetime.fromtimestamp(self.state.window_ts + self.window_secs, timezone.utc).strftime("%H:%M")
             d = "▲" if sig.direction == "UP" else "▼" if sig.direction == "DOWN" else "━"
             print(
                 f"[{self.asset.name}] {t_start}-{t_end} {d} ${price:,.2f} "

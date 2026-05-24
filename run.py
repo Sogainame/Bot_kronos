@@ -46,27 +46,35 @@ def stream_output(proc: subprocess.Popen, prefix: str, color: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Bot_kronos launcher")
-    ap.add_argument("--asset", default="btc", help="btc | eth | sol | xrp | doge | all | comma-list")
+    ap.add_argument("--asset", default="btc", help="btc | btc15m | eth | sol | xrp | doge | all | comma-list")
     ap.add_argument("--mode", default="safe", choices=["safe", "aggressive", "degen"])
     ap.add_argument("--max-bet", type=float, default=50.0)
     ap.add_argument("--live", action="store_true", help="LIVE trading (default: DRY)")
     ap.add_argument("--no-kronos", action="store_true", help="Disable Kronos filter")
     ap.add_argument("--kronos-driven", action="store_true",
                     help="Kronos-driven mode: bot trades direction from Kronos, no other filters")
+    ap.add_argument("--timeframe", default="5", choices=["5", "15"],
+                    help="Window length in minutes: 5 or 15. Auto-selects asset and kronos window.")
     ap.add_argument("--device", default="mps", choices=["mps", "cpu", "cuda"])
     ap.add_argument("--paths", type=int, default=20, help="Forecast paths in fan")
     args = ap.parse_args()
 
     here = Path(__file__).parent.resolve()
 
+    # Resolve asset and kronos window based on --timeframe
+    asset_arg = args.asset
+    if args.timeframe == "15" and asset_arg == "btc":
+        asset_arg = "btc15m"  # auto-switch to 15-min BTC config
+
     # Build commands
     py = sys.executable
     kronos_cmd = [py, "-u", str(here / "kronos_service.py"),
                   "--device", args.device,
-                  "--paths", str(args.paths)]
+                  "--paths", str(args.paths),
+                  "--window-minutes", args.timeframe]
 
     bot_cmd = [py, "-u", str(here / "bot.py"),
-               "--asset", args.asset,
+               "--asset", asset_arg,
                "--mode", args.mode,
                "--max-bet", str(args.max_bet)]
     if args.live:
@@ -82,7 +90,7 @@ def main() -> None:
                    "OFF" if args.no_kronos else "ON (filter)")
     print(f"{INFO_COLOR}  Mode: {'LIVE' if args.live else 'DRY'} | "
           f"Kronos: {kronos_mode} | "
-          f"Asset: {args.asset} | Device: {args.device}{RESET}")
+          f"Asset: {asset_arg} | Timeframe: {args.timeframe}m | Device: {args.device}{RESET}")
     print(f"{INFO_COLOR}{'=' * 64}{RESET}\n")
 
     procs: list[subprocess.Popen] = []
