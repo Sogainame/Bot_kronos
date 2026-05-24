@@ -251,9 +251,18 @@ class Sniper:
             return False
 
         buy_price = round(book.best_ask, 2)
-        # In kronos-driven mode use a wider price range (early-window buys are cheap)
+        # KRONOS-DRIVEN: wait until token price drops to $0.50 or lower
         if self.kronos_driven:
-            min_p, max_p = 0.05, 0.90
+            if buy_price > 0.50:
+                # Don't fire, keep waiting on subsequent ticks
+                now = time.time()
+                last_log = getattr(self.state, "_kronos_wait_log_ts", 0.0)
+                if now - last_log > 10.0:
+                    print(f"[{a.name}] kronos: waiting for {sig.direction} ≤ $0.50 (now ${buy_price:.2f})")
+                    self.state._kronos_wait_log_ts = now
+                return False
+            # Price is at or below $0.50 — proceed to fire
+            min_p, max_p = 0.05, 0.50
         else:
             min_p, max_p = a.min_token_price, a.max_token_price
         if buy_price > max_p or buy_price < min_p:
